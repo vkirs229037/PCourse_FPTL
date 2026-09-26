@@ -1,188 +1,115 @@
-// =========================================================================
-// Алгоритм Дейкстры: матрица кратчайших расстояний между всеми парами
-// вершин взвешенного ОРИЕНТИРОВАННОГО графа с неотрицательными весами.
-//
-// Формат входного файла (простой набор чисел, разделённых пробелами
-// и/или переводами строк):
-//   N            - количество вершин графа (N >= 1);
-//   затем N * N  - чисел: построчно "развёрнутая" (row-major) матрица
-//                  смежности размера N x N.
-//                  Число в позиции (i, j) - вес ребра i -> j.
-//                  0 означает "ребра нет". Диагональные значения (i, i)
-//                  игнорируются (можно писать 0). Веса - целые >= 0.
-//
-// Результат печатается на экран построчно как матрица N x N: в ячейке
-// (i, j) - длина кратчайшего пути из i в j, либо 0, если j не
-// достижима из i. Как и вход, результат физически - плоский
-// (одномерный) список длины N*N, индекс ячейки (i, j) = i*N + j.
-// =========================================================================
-
 Scheme Dijkstra {
+    // Замена 999999999 на 0 в итоговом массиве расстояний
+    Fun replaceInf {
+        arr = [1];
+        N = [2];
+        i = [3];
 
-    // ---- доступ к элементу (i, j) плоской матрицы N x N ----
-    Fun matGet {
-        // [1]=M [2]=N [3]=i [4]=j
-        idx = (([3]*[2]).mul*[4]).add;
-        @ = ([1]*idx).arrayGet;
+        @ = (i * N).equal -> arr,
+        ((arr * i).arrayGet * 999999999).equal -> ((arr * i * 0).arraySet * N * (i * 1).add).replaceInf,
+        (arr * N * (i * 1).add).replaceInf;
     }
 
-    // ---- Arr[start .. end-1] -> новый массив с индексами от 0 ----
-    Fun subArrayInt {
-        // [1]=Arr [2]=start [3]=end (не включая)
-        emptySub = (([3]*[2]).sub*0).arrayCreate;
-
-        Fun doSubArray {
-            // [1]=Arr [2]=start [3]=end(авто-уменьшение) [4]=накопитель
-            Arr = [1]; start = [2];
-            end = ([3]*1).sub;
-            subArr = [4];
-            cur = (Arr*end).arrayGet;
-            @ = (end*start).greater -> (Arr*start*end*(subArr*(end*start).sub*cur).arraySet).doSubArray,
-                                        (subArr*(end*start).sub*cur).arraySet;
-        }
-
-        @ = ([1]*[2]*[3]*emptySub).doSubArray;
-    }
-
-    // ---- начальный вектор расстояний от source: 0 у самого источника,
-    //      "бесконечность" (INF) у всех остальных вершин ----
-    Fun initDist {
-        // [1]=N [2]=source
-        INF = 1000000000;
-        base = ([1]*INF).arrayCreate;
-        @ = (base*[2]*0).arraySet;
-    }
-
-    // ---- индекс непосещённой вершины с минимальным dist ----
-    Fun argMinUnvisited {
-        // [1]=dist [2]=visited [3]=N
-        INF = 1000000000;
-        dist = [1]; visited = [2]; N = [3];
-
-        Fun scan {
-            // [1]=dist [2]=visited [3]=idx(авто-уменьшение, N..0) [4]=bestIdx [5]=bestVal
-            dist = [1]; visited = [2];
-            idx = ([3]*1).sub;
-            bestIdx = [4]; bestVal = [5];
-
-            vIdx = (visited*idx).arrayGet;
-            dIdx = (dist*idx).arrayGet;
-            isFree = (vIdx*0).equal;
-            isBetter = (isFree*(dIdx*bestVal).less).and;
-            newBestIdx = isBetter -> idx, bestIdx;
-            newBestVal = isBetter -> dIdx, bestVal;
-
-            @ = (idx*0).greater -> (dist*visited*idx*newBestIdx*newBestVal).scan,
-                                    newBestIdx;
-        }
-
-        bigVal = (INF*1).add;
-        noIdx = (0*1).sub;
-        @ = (dist*visited*N*noIdx*bigVal).scan;
-    }
-
-    // ---- релаксация всех рёбер, исходящих из вершины u ----
-    Fun relaxAll {
-        // [1]=dist [2]=visited [3]=adj [4]=N [5]=u [6]=v(авто-уменьшение, N..0)
-        INF = 1000000000;
-        dist = [1]; visited = [2]; adj = [3]; N = [4]; u = [5];
-        v = ([6]*1).sub;
-
-        distU = (dist*u).arrayGet;
-        w = (adj*N*u*v).matGet;
-        hasEdge = (w*0).greater;
-        vFree = ((visited*v).arrayGet*0).equal;
-        uReach = (distU*INF).less;
-        cand = (distU*w).add;
-        distV = (dist*v).arrayGet;
-        improves = (cand*distV).less;
-        canImprove = ((hasEdge*vFree).and*(uReach*improves).and).and;
-        newDist = canImprove -> (dist*v*cand).arraySet, dist;
-
-        @ = (v*0).greater -> (newDist*visited*adj*N*u*v).relaxAll,
-                              newDist;
-    }
-
-    // ---- (N-1) шагов "извлечь минимум и релаксировать соседей" ----
-    Fun dijkstraStep {
-        // [1]=dist [2]=visited [3]=adj [4]=N [5]=rounds(авто-уменьшение)
-        dist = [1]; visited = [2]; adj = [3]; N = [4];
-        rounds = ([5]*1).sub;
-
-        u = (dist*visited*N).argMinUnvisited;
-        visited2 = (visited*u*1).arraySet;
-        dist2 = (dist*visited2*adj*N*u*N).relaxAll;
-
-        @ = (rounds*0).greater -> (dist2*visited2*adj*N*rounds).dijkstraStep,
-                                   dist2;
-    }
-
-    // ---- заменить INF на 0 в готовом векторе расстояний ----
-    Fun cleanRow {
-        // [1]=dist [2]=idx(авто-уменьшение, N..0)
-        INF = 1000000000;
+    // Обновление расстояний до соседей текущей вершины u
+    Fun updateNeighbors {
         dist = [1];
-        idx = ([2]*1).sub;
+        visited = [2];
+        graph = [3];
+        N = [4];
+        u = [5];
+        v = [6];
 
-        v = (dist*idx).arrayGet;
-        newV = (v*INF).equal -> 0, v;
-        updated = (dist*idx*newV).arraySet;
+        nextV = (v * 1).add;
+        edgeIdx = ((u * N).mul * v).add;
 
-        @ = (idx*0).greater -> (updated*idx).cleanRow,
-                                updated;
+        @ = (v * N).equal -> dist,
+        ((visited * v).arrayGet * 0).equal -> (
+            ((graph * edgeIdx).arrayGet * 0).greater -> (
+                ((((dist * u).arrayGet * (graph * edgeIdx).arrayGet).add) * (dist * v).arrayGet).less ->
+                ((dist * v * (((dist * u).arrayGet * (graph * edgeIdx).arrayGet).add)).arraySet * visited * graph * N * u * nextV).updateNeighbors,
+                                                         (dist * visited * graph * N * u * nextV).updateNeighbors
+            ),
+            (dist * visited * graph * N * u * nextV).updateNeighbors
+        ),
+        (dist * visited * graph * N * u * nextV).updateNeighbors;
     }
 
-    // ---- Дейкстра от одной вершины-источника -> строка результата ----
-    Fun dijkstraFromSource {
-        // [1]=adj [2]=N [3]=source
-        adj = [1]; N = [2]; source = [3];
-        dist0 = (N*source).initDist;
-        visited0 = (N*0).arrayCreate;
-        finalDist = (dist0*visited0*adj*N*(N*1).sub).dijkstraStep;
-        @ = (finalDist*N).cleanRow;
+    // Поиск непосещенной вершины с минимальным расстоянием
+    Fun findMin {
+        dist = [1];
+        visited = [2];
+        N = [3];
+        i = [4];
+        min_val = [5];
+        min_idx = [6];
+
+        nextI = (i * 1).add;
+
+        @ = (i * N).equal -> min_idx,
+        (((visited * i).arrayGet * 0).equal * ((dist * i).arrayGet * min_val).less).and ->
+        (dist * visited * N * nextI * (dist * i).arrayGet * i).findMin,
+        (dist * visited * N * nextI * min_val * min_idx).findMin;
     }
 
-    // ---- все пары: строки источников N-1..0 склеиваются в порядок 0..N-1 ----
+    // Цикл алгоритма Дейкстры для одного источника
+    Fun dijkstraLoop {
+        dist = [1];
+        visited = [2];
+        graph = [3];
+        N = [4];
+        step = [5];
+
+        u = (dist * visited * N * 0 * 999999999 * 0).findMin;
+        u_dist = (dist * u).arrayGet;
+        new_visited = (visited * u * 1).arraySet;
+        new_dist = (dist * new_visited * graph * N * u * 0).updateNeighbors;
+
+        @ = (step * N).equal -> dist,
+        (u_dist * 999999999).equal -> dist,
+        (new_dist * new_visited * graph * N * (step * 1).add).dijkstraLoop;
+    }
+
+    // Запуск Дейкстры для одной исходной вершины
+    Fun singleSource {
+        src = [1];
+        N = [2];
+        graph = [3];
+
+        init_dist = (N * 999999999).arrayCreate;
+        dist = (init_dist * src * 0).arraySet;
+        visited = (N * 0).arrayCreate;
+
+        res = (dist * visited * graph * N * 0).dijkstraLoop;
+        @ = (res * N * 0).replaceInf;
+    }
+
+    // Запуск для всех пар вершин.
+    // Важно: результат уже содержит первую строку, поэтому src начинается с 1.
     Fun allPairs {
-        // [1]=adj [2]=N [3]=src(авто-уменьшение, N..0)
-        adj = [1]; N = [2];
-        src = ([3]*1).sub;
-        row = (adj*N*src).dijkstraFromSource;
+        src = [1];
+        N = [2];
+        graph = [3];
+        result = [4];
 
-        @ = (src*0).greater -> ((adj*N*src).allPairs*row).arrayCat,
-                                row;
+        nextSrc = (src * 1).add;
+
+        @ = (src * N).equal -> result,
+        (nextSrc * N * graph * (result * (src * N * graph).singleSource).arrayCat).allPairs;
     }
 
-    // ---- печать плоской матрицы N x N построчно ----
-    Fun printMatrix {
-        // [1]=M [2]=N [3]=total(=N*N) [4]=idx(по возрастанию, с 0)
-        M = [1]; N = [2]; total = [3]; idx = [4];
-        val = (M*idx).arrayGet;
-        nextIdx = (idx*1).add;
-        isLastCol = ((nextIdx*N).mod*0).equal;
-        sep = isLastCol -> "\n", " ";
-
-        @ = (nextIdx*total).less -> val.print*sep.print*(M*N*total*nextIdx).printMatrix,
-                                     val.print*sep.print;
-    }
-
-    // ================= точка входа схемы =================
     inFile = [1];
+    N = [2].toInt;
+    size = (N * N).mul;
 
-    // 1) читаем только N - первое число файла
-    nRaw = (inFile*(1*0).arrayCreate).openFile;
-    N = (nRaw*0).arrayGet;
+    graph = (inFile * (size * 0).arrayCreate).openFile;
 
-    // 2) перечитываем файл целиком: N (снова) + N*N чисел матрицы смежности
-    total = (1*(N*N).mul).add;
-    raw = (inFile*(total*0).arrayCreate).openFile;
-    adj = (raw*1*total).subArrayInt;
+    // Начальный аккумулятор не может быть пустым.
+    // Поэтому сразу вычисляем нулевую строку и передаем ее как начальный результат.
+    firstRow = (0 * N * graph).singleSource;
+    resultMatrix = (1 * N * graph * firstRow).allPairs;
 
-    // 3) все кратчайшие пути и печать результата
-    result = (adj*N*N).allPairs;
-    @ = (result*N*(N*N).mul*0).printMatrix;
+    @ = resultMatrix;
 }
 
 Application
-// вход: единственный аргумент - имя файла с графом
 %Dijkstra
