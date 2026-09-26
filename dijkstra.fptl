@@ -1,16 +1,35 @@
 Scheme Dijkstra {
-    // Замена 999999999 на 0 в итоговом массиве расстояний
+    // Целочисленный корень.
+    // Ищем такое i, что i * i == x.
+    Fun isqrt {
+        x = [1];
+        i = [2];
+
+        sq = (i * i).mul;
+        next = (i * 1).add;
+
+        @ = (sq * x).equal -> i,
+            (sq * x).greater -> (i * 1).sub,
+            (x * next).isqrt;
+    }
+
+    // Замена 999999999 на 0 для недостижимых вершин
     Fun replaceInf {
         arr = [1];
         N = [2];
         i = [3];
 
-        @ = (i * N).equal -> arr,
-        ((arr * i).arrayGet * 999999999).equal -> ((arr * i * 0).arraySet * N * (i * 1).add).replaceInf,
-        (arr * N * (i * 1).add).replaceInf;
+        nextI = (i * 1).add;
+
+        @ = (i * N).less -> (
+                ((arr * i).arrayGet * 999999999).equal ->
+                    ((arr * i * 0).arraySet * N * nextI).replaceInf,
+                (arr * N * nextI).replaceInf
+            ),
+            arr;
     }
 
-    // Обновление расстояний до соседей текущей вершины u
+    // Обновление расстояний до соседей вершины u
     Fun updateNeighbors {
         dist = [1];
         visited = [2];
@@ -21,37 +40,49 @@ Scheme Dijkstra {
 
         nextV = (v * 1).add;
         edgeIdx = ((u * N).mul * v).add;
+        graphLen = graph.arrayLen;
 
-        @ = (v * N).equal -> dist,
-        ((visited * v).arrayGet * 0).equal -> (
-            ((graph * edgeIdx).arrayGet * 0).greater -> (
-                ((((dist * u).arrayGet * (graph * edgeIdx).arrayGet).add) * (dist * v).arrayGet).less ->
-                ((dist * v * (((dist * u).arrayGet * (graph * edgeIdx).arrayGet).add)).arraySet * visited * graph * N * u * nextV).updateNeighbors,
-                                                         (dist * visited * graph * N * u * nextV).updateNeighbors
+        @ = (u * N).less -> (
+                ((v * N).less * (edgeIdx * graphLen).less).and -> (
+                    ((visited * v).arrayGet * 0).equal -> (
+                        ((graph * edgeIdx).arrayGet * 0).greater -> (
+                            ((((dist * u).arrayGet * (graph * edgeIdx).arrayGet).add) * (dist * v).arrayGet).less ->
+                                ((dist * v * (((dist * u).arrayGet * (graph * edgeIdx).arrayGet).add)).arraySet * visited * graph * N * u * nextV).updateNeighbors,
+                            (dist * visited * graph * N * u * nextV).updateNeighbors
+                        ),
+                        (dist * visited * graph * N * u * nextV).updateNeighbors
+                    ),
+                    (dist * visited * graph * N * u * nextV).updateNeighbors
+                ),
+                dist
             ),
-            (dist * visited * graph * N * u * nextV).updateNeighbors
-        ),
-        (dist * visited * graph * N * u * nextV).updateNeighbors;
+            dist;
     }
 
-    // Поиск непосещенной вершины с минимальным расстоянием
+    // Поиск непосещенной вершины с минимальным расстоянием.
+    // Если такой нет, возвращается N.
     Fun findMin {
         dist = [1];
         visited = [2];
         N = [3];
         i = [4];
-        min_val = [5];
-        min_idx = [6];
+        best_dist = [5];
+        best_idx = [6];
 
         nextI = (i * 1).add;
 
-        @ = (i * N).equal -> min_idx,
-        (((visited * i).arrayGet * 0).equal * ((dist * i).arrayGet * min_val).less).and ->
-        (dist * visited * N * nextI * (dist * i).arrayGet * i).findMin,
-        (dist * visited * N * nextI * min_val * min_idx).findMin;
+        @ = (i * N).less -> (
+                ((visited * i).arrayGet * 0).equal -> (
+                    ((dist * i).arrayGet * best_dist).less ->
+                        (dist * visited * N * nextI * (dist * i).arrayGet * i).findMin,
+                    (dist * visited * N * nextI * best_dist * best_idx).findMin
+                ),
+                (dist * visited * N * nextI * best_dist * best_idx).findMin
+            ),
+            best_idx;
     }
 
-    // Цикл алгоритма Дейкстры для одного источника
+    // Цикл Дейкстры для одного источника
     Fun dijkstraLoop {
         dist = [1];
         visited = [2];
@@ -59,17 +90,22 @@ Scheme Dijkstra {
         N = [4];
         step = [5];
 
-        u = (dist * visited * N * 0 * 999999999 * 0).findMin;
-        u_dist = (dist * u).arrayGet;
-        new_visited = (visited * u * 1).arraySet;
-        new_dist = (dist * new_visited * graph * N * u * 0).updateNeighbors;
+        uRaw = (dist * visited * N * 0 * 999999999 * N).findMin;
+
+        // Защитное значение, чтобы случайные выходы за границу не приводили к падению
+        u = (uRaw * N).less -> uRaw, 0;
+        nextStep = (step * 1).add;
 
         @ = (step * N).equal -> dist,
-        (u_dist * 999999999).equal -> dist,
-        (new_dist * new_visited * graph * N * (step * 1).add).dijkstraLoop;
+            (uRaw * N).less -> (
+                (((dist * u).arrayGet * 999999999).equal -> dist,
+                 ((dist * (visited * u * 1).arraySet * graph * N * u * 0).updateNeighbors *
+                  (visited * u * 1).arraySet * graph * N * nextStep).dijkstraLoop)
+            ),
+            dist;
     }
 
-    // Запуск Дейкстры для одной исходной вершины
+    // Дейкстра для одной исходной вершины
     Fun singleSource {
         src = [1];
         N = [2];
@@ -83,8 +119,7 @@ Scheme Dijkstra {
         @ = (res * N * 0).replaceInf;
     }
 
-    // Запуск для всех пар вершин.
-    // Важно: результат уже содержит первую строку, поэтому src начинается с 1.
+    // Все пары: первая строка уже есть в result, поэтому начинаем с 1
     Fun allPairs {
         src = [1];
         N = [2];
@@ -93,22 +128,28 @@ Scheme Dijkstra {
 
         nextSrc = (src * 1).add;
 
-        @ = (src * N).equal -> result,
-        (nextSrc * N * graph * (result * (src * N * graph).singleSource).arrayCat).allPairs;
+        @ = (src * N).less ->
+                (nextSrc * N * graph * (result * (src * N * graph).singleSource).arrayCat).allPairs,
+            result;
     }
 
     inFile = [1];
     N = [2].toInt;
+
+    // Размер буфера для чтения файла.
+    // Если второй аргумент — число вершин, то размер графа равен N * N.
     size = (N * N).mul;
 
     graph = (inFile * (size * 0).arrayCreate).openFile;
 
-    // Начальный аккумулятор не может быть пустым.
-    // Поэтому сразу вычисляем нулевую строку и передаем ее как начальный результат.
-    firstRow = (0 * N * graph).singleSource;
-    resultMatrix = (1 * N * graph * firstRow).allPairs;
+    // Дополнительно определяем число вершин по фактической длине графа.
+    // Это защищает от случая, когда передали размер файла, а не число вершин.
+    vertexN = (graph.arrayLen * 0).isqrt;
 
-    @ = resultMatrix;
+    firstRow = (0 * vertexN * graph).singleSource;
+    resultMatrix = (1 * vertexN * graph * firstRow).allPairs;
+
+    @ = (resultMatrix * "result.txt").createFile * "result written".printLine;
 }
 
 Application
