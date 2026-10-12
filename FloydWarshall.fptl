@@ -1,0 +1,188 @@
+// Кратчайшие пути между всеми парами вершин: алгоритм Флойда-Уоршелла.
+//
+// Формат входного файла (целые числа через пробелы/переводы строк):
+//   N
+//   w11 w12 ... w1N
+//   ...
+//   wN1 wN2 ... wNN
+// wij - вес дуги i->j (может быть отрицательным); 0 вне диагонали = дуги нет;
+// диагональ игнорируется.
+//
+// Результат: матрица N x N расстояний; 0 - если j недостижима из i.
+// Если в графе есть цикл отрицательного веса, печатается сообщение об этом.
+//
+// Параллельная версия: на шаге K каждая строка новой матрицы
+// D'[I][J] = min(D[I][J], D[I][K] + D[K][J]) зависит только от строк I и K
+// старой матрицы D, которая лишь читается. Поэтому все N строк считаются
+// независимо (в новые массивы), и интерпретатор может выполнять их параллельно.
+
+Scheme FloydWarshall
+{
+	@ = [1].readFile.(id -> Parse.Solve, "File not found!\n".print);
+
+	// (text) -> (W * N)
+	Parse = ([1] * "-?[0-9]+").getToken.([1].toInt * [2]).
+			((([1] * ([1] * 0).arrayCreate).arrayCreate * [1] * 0 * [2]).ReadMatr * [1]);
+
+	// (W * N) -> печать результата
+	// после "." кортеж: [1]=D [2]=N
+	Solve = (([1] * [2] * 0).Floyd * [2]).
+			(([1] * [2] * 0).HasNegDiag -> "Error: graph contains a negative cycle\n".print,
+										  ([1] * [2] * 0).MatrToText.print);
+
+	// "бесконечность"
+	Fun Inf
+	{
+		@ = 1000000000;
+	}
+
+	// ---------------- чтение графа ----------------
+
+	// (w * i * j) -> вес во внутреннем представлении
+	Fun ToWeight
+	{
+		W = [1];
+		I = [2];
+		J = [3];
+
+		@ = (I * J).equal -> 0,
+			(W * 0).equal -> Inf,
+			W;
+	}
+
+	// (Row * N * I * J * Text) -> (Row * Rest)
+	Fun ReadRow
+	{
+		Row = [1];
+		N = [2];
+		I = [3];
+		J = [4];
+		Text = [5];
+
+		@ = (J * N).equal -> Row * Text,
+			((Text * "-?[0-9]+").getToken.(id -> [1] * [2], "0" * "") * Row * N * I * J).
+				(([3] * [6] * ([1].toInt * [5] * [6]).ToWeight).arraySet * [4] * [5] * ([6] * 1).add * [2]).ReadRow;
+	}
+
+	// (M * N * I * Text) -> M
+	Fun ReadMatr
+	{
+		M = [1];
+		N = [2];
+		I = [3];
+		Text = [4];
+
+		@ = (I * N).equal -> M,
+			(((N * 0).arrayCreate * N * I * 0 * Text).ReadRow * M * N * I).
+				(([3] * [5] * [1]).arraySet * [4] * ([5] * 1).add * [2]).ReadMatr;
+	}
+
+	// ---------------- алгоритм Флойда-Уоршелла ----------------
+
+	// внешний цикл по K: (D * N * K) -> D
+	// шаги по K идут последовательно: шагу K+1 нужна вся матрица шага K
+	Fun Floyd
+	{
+		D = [1];
+		N = [2];
+		K = [3];
+
+		@ = (K * N).equal -> D,
+			((D * N * K * 0).FloydRows * N * (K * 1).add).Floyd;
+	}
+
+	// (D * N * K * I) -> новая матрица, строки I..N-1 которой - строки шага K.
+	// Оба операнда "*" рекурсивны (NewRow содержит цикл RowLoop),
+	// поэтому строки одного шага K вычисляются параллельно.
+	// Старая матрица D только читается; результат собирается в новый массив
+	// при возврате из рекурсии, так что гонок по данным нет.
+	Fun FloydRows
+	{
+		D = [1];
+		N = [2];
+		K = [3];
+		I = [4];
+
+		@ = (I * N).equal -> (N * (N * 0).arrayCreate).arrayCreate,
+			((D * N * K * I).NewRow * (D * N * K * (I * 1).add).FloydRows * I).
+				([2] * [3] * [1]).arraySet;
+	}
+
+	// (D * N * K * I) -> строка I после шага K
+	// если D[I][K] = Inf, строка не меняется и используется повторно
+	// (это безопасно: строки старой матрицы никто не изменяет)
+	Fun NewRow
+	{
+		D = [1];
+		N = [2];
+		K = [3];
+		I = [4];
+
+		Row = (D * I).arrayGet;
+		Dik = ((D * I).arrayGet * K).arrayGet;
+
+		@ = (Dik * Inf).gequal -> Row,
+			((D * K).arrayGet * Row * Dik * N * (N * 0).arrayCreate * 0).RowLoop;
+	}
+
+	// (RowK * RowI * Dik * N * Res * J) -> Res
+	// Res[J] = min(RowI[J], Dik + RowK[J]); Res - новый массив
+	Fun RowLoop
+	{
+		RowK = [1];
+		RowI = [2];
+		Dik = [3];
+		N = [4];
+		Res = [5];
+		J = [6];
+
+		Dij = (RowI * J).arrayGet;
+		Dkj = (RowK * J).arrayGet;
+		Keep = (RowK * RowI * Dik * N * (Res * J * Dij).arraySet * (J * 1).add).RowLoop;
+
+		@ = (J * N).equal -> Res,
+			(Dkj * Inf).gequal -> Keep,
+			((Dik * Dkj).add * Dij).less ->
+				(RowK * RowI * Dik * N * (Res * J * (Dik * Dkj).add).arraySet * (J * 1).add).RowLoop,
+			Keep;
+	}
+
+	// (D * N * I) -> true, если на диагонали есть отрицательный элемент
+	Fun HasNegDiag
+	{
+		D = [1];
+		N = [2];
+		I = [3];
+
+		@ = (I * N).equal -> false,
+			(((D * I).arrayGet * I).arrayGet * 0).less -> true,
+			(D * N * (I * 1).add).HasNegDiag;
+	}
+
+	// ---------------- вывод ----------------
+
+	Fun RowToText
+	{
+		Row = [1];
+		N = [2];
+		J = [3];
+
+		Cell = ((Row * J).arrayGet * Inf).gequal -> "0", (Row * J).arrayGet.toString;
+
+		@ = ((J * 1).add * N).equal -> (Cell * "\n").cat,
+			(Cell * " " * (Row * N * (J * 1).add).RowToText).cat;
+	}
+
+	Fun MatrToText
+	{
+		M = [1];
+		N = [2];
+		I = [3];
+
+		@ = (I * N).equal -> "",
+			(((M * I).arrayGet * N * 0).RowToText * (M * N * (I * 1).add).MatrToText).cat;
+	}
+}
+
+Application
+%FloydWarshall("graph1.txt")
