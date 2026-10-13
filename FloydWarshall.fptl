@@ -185,4 +185,4 @@ Scheme FloydWarshall
 }
 
 Application
-%FloydWarshall("graph1.txt")
+%FloydWarshall
