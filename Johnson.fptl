@@ -23,11 +23,12 @@ Scheme JohnsonAPSP
 	Parse = ([1] * "-?[0-9]+").getToken.([1].toInt * [2]).
 			((([1] * ([1] * 0).arrayCreate).arrayCreate * [1] * 0 * [2]).ReadMatr * [1]);
 
-	// (W * N) -> печать результата
+	// (W * N) -> матрица расстояний (без вывода, чтобы не учитывать I/O во времени).
+	// Чтобы снова печатать результат: ((...).JohnsonAll * [4] * 0).MatrToText.print
 	// h изначально нулевой: это и есть результат первой релаксации дуг q->v.
 	// после "." кортеж: [1]=H [2]=ok [3]=W [4]=N
 	Solve = (([1] * [2] * ([2] * 0).arrayCreate * 1).BellmanFord * [1] * [2]).
-			([2] -> ((([3] * [4] * [1] * 0 * 0).Reweight * [4] * [1] * 0).JohnsonAll * [4] * 0).MatrToText.print,
+			([2] -> (([3] * [4] * [1] * 0 * 0).Reweight * [4] * [1] * 0).JohnsonAll,
 					"Error: graph contains a negative cycle\n".print);
 
 	// "бесконечность"

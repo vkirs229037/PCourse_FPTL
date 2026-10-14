@@ -21,9 +21,10 @@ Scheme DijkstraAPSP
 	Parse = ([1] * "-?[0-9]+").getToken.([1].toInt * [2]).
 			((([1] * ([1] * 0).arrayCreate).arrayCreate * [1] * 0 * [2]).ReadMatr * [1]);
 
-	// (W * N) -> печать результата
+	// (W * N) -> матрица расстояний (без вывода, чтобы не учитывать I/O во времени).
+	// Чтобы снова печатать результат: (([1] * [2] * 0).AllDijkstra * [2] * 0).MatrToText.print
 	Solve = ([1] * [2] * 0).MatrHasNeg -> "Error: Dijkstra's algorithm requires non-negative weights\n".print,
-			(([1] * [2] * 0).AllDijkstra * [2] * 0).MatrToText.print;
+			([1] * [2] * 0).AllDijkstra;
 
 	// "бесконечность"
 	Fun Inf
